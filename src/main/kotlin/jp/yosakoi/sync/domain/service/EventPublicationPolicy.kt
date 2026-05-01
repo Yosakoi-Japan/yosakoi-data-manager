@@ -14,7 +14,7 @@ class EventPublicationPolicy {
      * `Approved`、期限内、重複なしのイベントだけを公開候補として返す。
      */
     fun filterPublishableEvents(sourceEvents: List<SourceEvent>, today: LocalDate): PublicationResult {
-        val approvedEvents = sourceEvents.filter { it.status == "Approved" }
+        val approvedEvents = sourceEvents.filter { it.status == "Approved" && it.officialUrl != null }
         val activeEvents = mutableListOf<SourceEvent>()
         val expiredEvents = mutableListOf<SourceEvent>()
 

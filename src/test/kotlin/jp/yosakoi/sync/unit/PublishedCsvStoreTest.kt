@@ -17,17 +17,17 @@ class PublishedCsvStoreTest {
 
     @Test
     fun `compare new updated and skipped`() {
-        val existingColumns = makeRow(eventId = "a", eventName = "A", updatedAt = "2026-05-01T10:00:00+09:00")
+        val existingColumns = makeRow(eventId = "a", eventName = "A", updatedAt = "2026-05-01T10:00:00+09:00", extra = mapOf("official_url" to "https://example.com/a"))
         val existing = linkedMapOf(
             "a" to PublishedEventRecord.fromColumns(existingColumns),
         )
         existing["c"] = PublishedEventRecord.fromColumns(
-            makeRow(eventId = "c", eventName = "C", updatedAt = "2026-05-01T10:00:00+09:00"),
+            makeRow(eventId = "c", eventName = "C", updatedAt = "2026-05-01T10:00:00+09:00", extra = mapOf("official_url" to "https://example.com/c")),
         )
         val events = listOf(
-            ApprovedEvent.fromSource(SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A", updatedAt = "2026-05-02T10:00:00+09:00"))),
-            ApprovedEvent.fromSource(SourceEvent.fromColumns(makeRow(eventId = "b", eventName = "B", updatedAt = "2026-05-03T10:00:00+09:00"))),
-            ApprovedEvent.fromSource(SourceEvent.fromColumns(makeRow(eventId = "c", eventName = "C", updatedAt = "invalid"))),
+            ApprovedEvent.fromSource(SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A", updatedAt = "2026-05-02T10:00:00+09:00", extra = mapOf("official_url" to "https://example.com/a")))),
+            ApprovedEvent.fromSource(SourceEvent.fromColumns(makeRow(eventId = "b", eventName = "B", updatedAt = "2026-05-03T10:00:00+09:00", extra = mapOf("official_url" to "https://example.com/b")))),
+            ApprovedEvent.fromSource(SourceEvent.fromColumns(makeRow(eventId = "c", eventName = "C", updatedAt = "invalid", extra = mapOf("official_url" to "https://example.com/c")))),
         )
 
         val result = PublishedEventMergeService().merge(events, existing)
@@ -40,12 +40,12 @@ class PublishedCsvStoreTest {
     fun `compare accepts date only updated_at`() {
         val existing = linkedMapOf(
             "a" to PublishedEventRecord.fromColumns(
-                makeRow(eventId = "a", eventName = "A", updatedAt = "2026-04-28"),
+                makeRow(eventId = "a", eventName = "A", updatedAt = "2026-04-28", extra = mapOf("official_url" to "https://example.com/a")),
             ),
         )
         val events = listOf(
             ApprovedEvent.fromSource(
-                SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A", updatedAt = "2026-04-29")),
+                SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A", updatedAt = "2026-04-29", extra = mapOf("official_url" to "https://example.com/a"))),
             ),
         )
 
