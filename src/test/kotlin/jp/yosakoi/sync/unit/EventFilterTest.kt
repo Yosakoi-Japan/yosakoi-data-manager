@@ -11,9 +11,9 @@ class EventFilterTest {
     @Test
     fun `status and end date filtering`() {
         val rows = listOf(
-            SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A")),
+            SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A", extra = mapOf("official_url" to "https://example.com/a"))),
             SourceEvent.fromColumns(makeRow(eventId = "b", eventName = "B", status = "Progress")),
-            SourceEvent.fromColumns(makeRow(eventId = "c", eventName = "C", endDate = "2026-01-01")),
+            SourceEvent.fromColumns(makeRow(eventId = "c", eventName = "C", endDate = "2026-01-01", extra = mapOf("official_url" to "https://example.com/c"))),
         )
 
         val filtered = EventPublicationPolicy().filterPublishableEvents(rows, LocalDate.of(2026, 6, 1))
@@ -26,8 +26,8 @@ class EventFilterTest {
     @Test
     fun `duplicate event id is excluded`() {
         val rows = listOf(
-            SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A")),
-            SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A2", updatedAt = "2026-05-02T10:00:00+09:00")),
+            SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A", extra = mapOf("official_url" to "https://example.com/a"))),
+            SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A2", updatedAt = "2026-05-02T10:00:00+09:00", extra = mapOf("official_url" to "https://example.com/a2"))),
         )
 
         val filtered = EventPublicationPolicy().filterPublishableEvents(rows, LocalDate.of(2026, 6, 1))
@@ -35,5 +35,29 @@ class EventFilterTest {
         assertEquals(emptyList(), filtered.publishableEvents)
         assertEquals(1, filtered.duplicateEvents.size)
         assertEquals("a", filtered.duplicateEvents.first().eventId)
+    }
+
+    @Test
+    fun `missing official url is excluded`() {
+        val rows = listOf(
+            SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A", extra = mapOf("official_url" to ""))),
+            SourceEvent.fromColumns(makeRow(eventId = "b", eventName = "B", extra = mapOf("official_url" to "https://example.com"))),
+        )
+
+        val filtered = EventPublicationPolicy().filterPublishableEvents(rows, LocalDate.of(2026, 6, 1))
+
+        assertEquals(listOf("b"), filtered.publishableEvents.map { it.eventId })
+    }
+
+    @Test
+    fun `invalid official url is excluded`() {
+        val rows = listOf(
+            SourceEvent.fromColumns(makeRow(eventId = "a", eventName = "A", extra = mapOf("official_url" to "not-a-url"))),
+            SourceEvent.fromColumns(makeRow(eventId = "b", eventName = "B", extra = mapOf("official_url" to "https://example.com"))),
+        )
+
+        val filtered = EventPublicationPolicy().filterPublishableEvents(rows, LocalDate.of(2026, 6, 1))
+
+        assertEquals(listOf("b"), filtered.publishableEvents.map { it.eventId })
     }
 }

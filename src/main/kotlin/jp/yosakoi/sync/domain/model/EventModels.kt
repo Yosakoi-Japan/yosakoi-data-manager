@@ -1,5 +1,7 @@
 package jp.yosakoi.sync.domain.model
 
+import java.net.URI
+
 /**
  * 管理元の Google スプレッドシートから取得した 1 行分のイベントを表す。
  */
@@ -7,6 +9,7 @@ data class SourceEvent(
     val eventId: String,
     val eventName: String,
     val status: String,
+    val officialUrl: URI?,
     val startDate: String,
     val endDate: String,
     val updatedAt: String,
@@ -26,11 +29,24 @@ data class SourceEvent(
                 eventId = normalized.getValue("event_id"),
                 eventName = normalized.getValue("event_name"),
                 status = normalized.getValue("status"),
+                officialUrl = parseOfficialUrl(normalized["official_url"].orEmpty()),
                 startDate = normalized.getValue("start_date"),
                 endDate = normalized.getValue("end_date"),
                 updatedAt = normalized.getValue("updated_at"),
                 columns = normalized,
             )
+        }
+
+        /**
+         * `official_url` を検証済み URI として解釈する。無効な場合は `null` を返す。
+         */
+        private fun parseOfficialUrl(value: String): URI? {
+            if (value.isBlank()) {
+                return null
+            }
+            return runCatching { URI(value) }
+                .getOrNull()
+                ?.takeIf { it.isAbsolute && !it.host.isNullOrBlank() && it.scheme in setOf("http", "https") }
         }
     }
 }

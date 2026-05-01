@@ -39,7 +39,7 @@ class SyncEventsCliTest {
         val command = SyncEventsCommand(
             stdout = PrintStream(output),
             useCase = SyncEventsUseCase(
-                eventSource = FakeReader(rows = listOf(makeRow(eventId = "a", eventName = "Festival A"))),
+                eventSource = FakeReader(rows = listOf(makeRow(eventId = "a", eventName = "Festival A", extra = mapOf("official_url" to "https://example.com/a")))),
                 publishedEventRepository = repository,
             ),
         )

@@ -29,9 +29,9 @@ class SyncPipelineTest {
         Files.writeString(output, headerLine)
         val reader = FakeReader(
             rows = listOf(
-                makeRow(eventId = "a", eventName = "Festival A", status = "Approved"),
+                makeRow(eventId = "a", eventName = "Festival A", status = "Approved", extra = mapOf("official_url" to "https://example.com/a")),
                 makeRow(eventId = "b", eventName = "Festival B", status = "Progress"),
-                makeRow(eventId = "c", eventName = "Festival C", status = "Approved", endDate = "2026-01-01"),
+                makeRow(eventId = "c", eventName = "Festival C", status = "Approved", endDate = "2026-01-01", extra = mapOf("official_url" to "https://example.com/c")),
             ),
         )
 
@@ -51,12 +51,12 @@ class SyncPipelineTest {
         Files.writeString(
             output,
             headerLine +
-                "a,Festival A,Approved,,,2026-06-10,2026-06-14,,,,,,,,,,2026-05-01T10:00:00+09:00,\n",
+                "a,Festival A,Approved,,https://example.com/a,2026-06-10,2026-06-14,,,,,,,,,,2026-05-01T10:00:00+09:00,\n",
         )
         val reader = FakeReader(
             rows = listOf(
-                makeRow(eventId = "a", eventName = "Festival A", updatedAt = "2026-05-02T10:00:00+09:00"),
-                makeRow(eventId = "b", eventName = "Festival B", updatedAt = "2026-05-03T10:00:00+09:00"),
+                makeRow(eventId = "a", eventName = "Festival A", updatedAt = "2026-05-02T10:00:00+09:00", extra = mapOf("official_url" to "https://example.com/a")),
+                makeRow(eventId = "b", eventName = "Festival B", updatedAt = "2026-05-03T10:00:00+09:00", extra = mapOf("official_url" to "https://example.com/b")),
             ),
         )
 
@@ -73,8 +73,8 @@ class SyncPipelineTest {
         Files.writeString(output, headerLine)
         val reader = FakeReader(
             rows = listOf(
-                makeRow(eventId = "a", eventName = "Festival A"),
-                makeRow(eventId = "a", eventName = "Festival A duplicate", updatedAt = "2026-05-02T10:00:00+09:00"),
+                makeRow(eventId = "a", eventName = "Festival A", extra = mapOf("official_url" to "https://example.com/a")),
+                makeRow(eventId = "a", eventName = "Festival A duplicate", updatedAt = "2026-05-02T10:00:00+09:00", extra = mapOf("official_url" to "https://example.com/a2")),
             ),
         )
 
@@ -109,7 +109,7 @@ class SyncPipelineTest {
             }
         }
         val useCase = SyncEventsUseCase(
-            FakeReader(rows = listOf(makeRow(eventId = "a", eventName = "Festival A"))),
+            FakeReader(rows = listOf(makeRow(eventId = "a", eventName = "Festival A", extra = mapOf("official_url" to "https://example.com/a")))),
             failingRepository,
         )
 
@@ -124,7 +124,7 @@ class SyncPipelineTest {
     fun `dry run manual invocation path`() {
         Files.writeString(output, headerLine)
         val useCase = SyncEventsUseCase(
-            FakeReader(rows = listOf(makeRow(eventId = "a", eventName = "Festival A"))),
+            FakeReader(rows = listOf(makeRow(eventId = "a", eventName = "Festival A", extra = mapOf("official_url" to "https://example.com/a")))),
             FilePublishedEventRepository(output),
         )
 
@@ -137,7 +137,7 @@ class SyncPipelineTest {
     @Test
     fun `fails when existing csv header is missing`() {
         val useCase = SyncEventsUseCase(
-            FakeReader(rows = listOf(makeRow(eventId = "a", eventName = "Festival A"))),
+            FakeReader(rows = listOf(makeRow(eventId = "a", eventName = "Festival A", extra = mapOf("official_url" to "https://example.com/a")))),
             FilePublishedEventRepository(output),
         )
 
@@ -146,5 +146,43 @@ class SyncPipelineTest {
         }
 
         assertEquals("yosakoi_festival.csv header is required", error.message)
+    }
+
+    @Test
+    fun `event without official url is excluded from export`() {
+        Files.writeString(output, headerLine)
+        val reader = FakeReader(
+            rows = listOf(
+                makeRow(eventId = "a", eventName = "Festival A", extra = mapOf("official_url" to "")),
+                makeRow(eventId = "b", eventName = "Festival B", extra = mapOf("official_url" to "https://example.com/b")),
+            ),
+        )
+
+        val result = SyncEventsUseCase(reader, FilePublishedEventRepository(output))
+            .execute(SyncEventsRequest("sheet", "events", dryRun = false, trigger = "manual", today = LocalDate.of(2026, 6, 1)))
+
+        assertEquals(1, result.approvedCount)
+        val lines = Files.readAllLines(output)
+        assertEquals(2, lines.size)
+        assertTrue(lines[1].contains("Festival B"))
+    }
+
+    @Test
+    fun `event with invalid official url is excluded from export`() {
+        Files.writeString(output, headerLine)
+        val reader = FakeReader(
+            rows = listOf(
+                makeRow(eventId = "a", eventName = "Festival A", extra = mapOf("official_url" to "not-a-url")),
+                makeRow(eventId = "b", eventName = "Festival B", extra = mapOf("official_url" to "https://example.com/b")),
+            ),
+        )
+
+        val result = SyncEventsUseCase(reader, FilePublishedEventRepository(output))
+            .execute(SyncEventsRequest("sheet", "events", dryRun = false, trigger = "manual", today = LocalDate.of(2026, 6, 1)))
+
+        assertEquals(1, result.approvedCount)
+        val lines = Files.readAllLines(output)
+        assertEquals(2, lines.size)
+        assertTrue(lines[1].contains("Festival B"))
     }
 }
