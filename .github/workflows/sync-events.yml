@@ -39,6 +39,18 @@ jobs:
         run: |
           ./gradlew run --args="--sheet-id $GOOGLE_SHEET_ID --worksheet $GOOGLE_WORKSHEET"
 
+      - name: Commit generated CSV in this repository
+        run: |
+          if [ -z "$(git status --short -- yosakoi_festival.csv)" ]; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add yosakoi_festival.csv
+          git commit -m "chore: sync yosakoi festival csv"
+          git push
+
       - name: Checkout yosakoiPortal
         uses: actions/checkout@v4
         with:

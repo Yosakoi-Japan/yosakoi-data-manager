@@ -23,6 +23,7 @@ Google スプレッドシートのイベントデータから、Yosakoi Portal �
 GitHub Actions では、生成した `yosakoi_festival.csv` を別リポジトリ
 `Yosakoi-Japan/yosakoiPortal` の
 `frontend/app/src/assets/data/yosakoi_event.csv` にコピーして commit / push します。
+その前に、このリポジトリ自身の `yosakoi_festival.csv` も commit / push します。
 
 必要な Secrets は次です。
 
