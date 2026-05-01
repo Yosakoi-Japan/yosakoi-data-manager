@@ -39,14 +39,26 @@ jobs:
         run: |
           ./gradlew run --args="--sheet-id $GOOGLE_SHEET_ID --worksheet $GOOGLE_WORKSHEET"
 
-      - name: Commit generated CSV
+      - name: Checkout yosakoiPortal
+        uses: actions/checkout@v4
+        with:
+          repository: Yosakoi-Japan/yosakoiPortal
+          token: ${{ secrets.YOSAKOI_PORTAL_PAT }}
+          path: yosakoiPortal
+
+      - name: Copy generated CSV to frontend
         run: |
-          if git diff --quiet -- yosakoi_festival.csv; then
+          cp ./yosakoi_festival.csv ./yosakoiPortal/frontend/app/src/assets/data/yosakoi_event.csv
+
+      - name: Commit frontend CSV
+        working-directory: ./yosakoiPortal
+        run: |
+          if git diff --quiet -- frontend/app/src/assets/data/yosakoi_event.csv; then
             echo "No changes to commit"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add yosakoi_festival.csv
-          git commit -m "chore: sync yosakoi festival csv"
+          git add frontend/app/src/assets/data/yosakoi_event.csv
+          git commit -m "chore: sync frontend yosakoi_event csv"
           git push
