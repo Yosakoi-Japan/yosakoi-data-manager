@@ -53,7 +53,7 @@ jobs:
       - name: Commit frontend CSV
         working-directory: ./yosakoiPortal
         run: |
-          if git diff --quiet -- frontend/app/src/assets/data/yosakoi_event.csv; then
+          if [ -z "$(git status --short -- frontend/app/src/assets/data/yosakoi_event.csv)" ]; then
             echo "No changes to commit"
             exit 0
           fi
