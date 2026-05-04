@@ -34,7 +34,7 @@ class SyncEventsCliTest {
         val csvPath = tempDir.resolve("yosakoi_festival.csv")
         val repository = InMemoryPublishedEventRepository(
             outputPath = csvPath,
-            headers = listOf("event_id", "event_name", "status", "image_url", "official_url", "start_date", "end_date", "location", "team_count", "nearest_station", "parking_info", "description", "youtube_url", "latitude", "longitude", "map_url", "updated_at", "note"),
+            headers = listOf("event_id", "event_name", "status", "image_url", "official_url", "start_date", "end_date", "location", "team_count", "nearest_station", "parking_info", "description", "youtube_url", "latitude", "longitude", "map_url", "updated_at"),
         )
         val command = SyncEventsCommand(
             stdout = PrintStream(output),

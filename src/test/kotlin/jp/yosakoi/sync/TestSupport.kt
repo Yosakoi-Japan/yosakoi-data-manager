@@ -36,6 +36,7 @@ fun makeRow(
         "map_url" to "",
         "updated_at" to updatedAt,
         "note" to "",
+        "review" to "",
     )
     extra.forEach { (key, value) -> row[key] = value }
     return LinkedHashMap(row)
