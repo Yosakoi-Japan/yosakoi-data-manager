@@ -18,6 +18,10 @@ class SyncEventsUseCase(
     private val publicationPolicy: EventPublicationPolicy = EventPublicationPolicy(),
     private val mergeService: PublishedEventMergeService = PublishedEventMergeService(),
 ) {
+    companion object {
+        private val excludedOutputColumns = setOf("note", "review")
+    }
+
     /**
      * 管理元取得から公開 CSV 更新までの一連の同期処理を実行する。
      */
@@ -27,6 +31,7 @@ class SyncEventsUseCase(
         val publicationResult = publicationPolicy.filterPublishableEvents(sourceEvents, runDate)
         val snapshot = publishedEventRepository.loadSnapshot()
         require(snapshot.headers.isNotEmpty()) { "yosakoi_festival.csv header is required" }
+        val managedHeaders = snapshot.headers.filterNot { it in excludedOutputColumns }
 
         val mergeResult = mergeService.merge(
             publishableEvents = publicationResult.publishableEvents,
@@ -34,7 +39,8 @@ class SyncEventsUseCase(
         )
         val finalRows = publicationResult.publishableEvents
             .mapNotNull { event -> mergeResult.rowsByEventId[event.eventId] }
-        val changed = publishedEventRepository.save(snapshot.headers, finalRows, request.dryRun)
+            .map { row -> selectManagedColumns(row, managedHeaders) }
+        val changed = publishedEventRepository.save(managedHeaders, finalRows, request.dryRun)
 
         return SyncResult(
             fetchedCount = sourceEvents.size,
@@ -51,5 +57,14 @@ class SyncEventsUseCase(
             warnings = mergeResult.invalidUpdatedAtRecords.map { it.reason },
             trigger = request.trigger,
         )
+    }
+
+    /**
+     * 公開用 CSV に含める列だけを、指定ヘッダ順で取り出す。
+     */
+    private fun selectManagedColumns(row: Map<String, String>, headers: List<String>): LinkedHashMap<String, String> {
+        val selected = LinkedHashMap<String, String>()
+        headers.forEach { header -> selected[header] = row[header].orEmpty() }
+        return selected
     }
 }

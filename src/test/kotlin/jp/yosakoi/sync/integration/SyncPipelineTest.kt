@@ -22,7 +22,7 @@ class SyncPipelineTest {
         get() = tempDir.resolve("yosakoi_festival.csv")
 
     private val headerLine =
-        "event_id,event_name,status,image_url,official_url,start_date,end_date,location,team_count,nearest_station,parking_info,description,youtube_url,latitude,longitude,map_url,updated_at,note\n"
+        "event_id,event_name,status,image_url,official_url,start_date,end_date,location,team_count,nearest_station,parking_info,description,youtube_url,latitude,longitude,map_url,updated_at\n"
 
     @Test
     fun `approved only export flow`() {
@@ -51,7 +51,7 @@ class SyncPipelineTest {
         Files.writeString(
             output,
             headerLine +
-                "a,Festival A,Approved,,https://example.com/a,2026-06-10,2026-06-14,,,,,,,,,,2026-05-01T10:00:00+09:00,\n",
+                "a,Festival A,Approved,,https://example.com/a,2026-06-10,2026-06-14,,,,,,,,,,2026-05-01T10:00:00+09:00\n",
         )
         val reader = FakeReader(
             rows = listOf(
@@ -184,5 +184,37 @@ class SyncPipelineTest {
         val lines = Files.readAllLines(output)
         assertEquals(2, lines.size)
         assertTrue(lines[1].contains("Festival B"))
+    }
+
+    @Test
+    fun `private columns are removed from managed csv`() {
+        Files.writeString(
+            output,
+            "event_id,event_name,status,image_url,official_url,start_date,end_date,location,team_count,nearest_station,parking_info,description,youtube_url,latitude,longitude,map_url,updated_at,note,review\n",
+        )
+        val reader = FakeReader(
+            rows = listOf(
+                makeRow(
+                    eventId = "a",
+                    eventName = "Festival A",
+                    extra = mapOf(
+                        "official_url" to "https://example.com/a",
+                        "note" to "internal memo",
+                        "review" to "needs review",
+                    ),
+                ),
+            ),
+        )
+
+        SyncEventsUseCase(reader, FilePublishedEventRepository(output))
+            .execute(SyncEventsRequest("sheet", "events", dryRun = false, trigger = "manual", today = LocalDate.of(2026, 6, 1)))
+
+        val lines = Files.readAllLines(output)
+        assertEquals("event_id,event_name,status,image_url,official_url,start_date,end_date,location,team_count,nearest_station,parking_info,description,youtube_url,latitude,longitude,map_url,updated_at", lines.first())
+        assertTrue(lines[1].contains("Festival A"))
+        assertTrue(!lines.first().contains("note"))
+        assertTrue(!lines.first().contains("review"))
+        assertTrue(!lines[1].contains("internal memo"))
+        assertTrue(!lines[1].contains("needs review"))
     }
 }
