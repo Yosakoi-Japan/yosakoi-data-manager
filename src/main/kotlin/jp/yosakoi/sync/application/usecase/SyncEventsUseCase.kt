@@ -2,23 +2,27 @@ package jp.yosakoi.sync.application.usecase
 
 import jp.yosakoi.sync.application.model.SyncEventsRequest
 import jp.yosakoi.sync.application.model.SyncResult
-import jp.yosakoi.sync.application.port.EventSource
+import jp.yosakoi.sync.application.port.PortalDataSource
 import jp.yosakoi.sync.application.port.PublishedEventRepository
+import jp.yosakoi.sync.domain.model.PublishedAwardWinner
 import jp.yosakoi.sync.domain.model.SyncDecisionType
+import jp.yosakoi.sync.domain.model.VideoSourceType
+import jp.yosakoi.sync.domain.service.AwardWinnerPublicationPolicy
 import jp.yosakoi.sync.domain.service.EventPublicationPolicy
 import jp.yosakoi.sync.domain.service.PublishedEventMergeService
-import java.time.LocalDate
 
 /**
  * イベント同期のユースケースを表すアプリケーションサービス。
  */
 class SyncEventsUseCase(
-    private val eventSource: EventSource,
+    private val source: PortalDataSource,
     private val publishedEventRepository: PublishedEventRepository,
     private val publicationPolicy: EventPublicationPolicy = EventPublicationPolicy(),
+    private val awardPublicationPolicy: AwardWinnerPublicationPolicy = AwardWinnerPublicationPolicy(),
     private val mergeService: PublishedEventMergeService = PublishedEventMergeService(),
 ) {
     companion object {
+        const val AWARD_WINNERS_WORKSHEET = "award_winners"
         private val excludedOutputColumns = setOf("note", "review")
     }
 
@@ -26,9 +30,13 @@ class SyncEventsUseCase(
      * 管理元取得から公開 CSV 更新までの一連の同期処理を実行する。
      */
     fun execute(request: SyncEventsRequest): SyncResult {
-        val runDate = request.today ?: LocalDate.now()
-        val sourceEvents = eventSource.fetch(request.sheetId, request.worksheet)
-        val publicationResult = publicationPolicy.filterPublishableEvents(sourceEvents, runDate)
+        val sourceEvents = source.fetchEvents(request.sheetId, request.worksheet)
+        val sourceAwardWinners = source.fetchAwardWinners(request.sheetId, AWARD_WINNERS_WORKSHEET)
+        val publicationResult = publicationPolicy.filterPublishableEvents(sourceEvents)
+        val awardPublicationResult = awardPublicationPolicy.publish(
+            sourceAwardWinners,
+            publicationResult.publishableEvents.map { it.eventId }.toSet(),
+        )
         val snapshot = publishedEventRepository.loadSnapshot()
         require(snapshot.headers.isNotEmpty()) { "yosakoi_festival.csv header is required" }
         val managedHeaders = snapshot.headers.filterNot { it in excludedOutputColumns }
@@ -40,7 +48,14 @@ class SyncEventsUseCase(
         val finalRows = publicationResult.publishableEvents
             .mapNotNull { event -> mergeResult.rowsByEventId[event.eventId] }
             .map { row -> selectManagedColumns(row, managedHeaders) }
-        val changed = publishedEventRepository.save(managedHeaders, finalRows, request.dryRun)
+        val awardRows = awardPublicationResult.winners.map(PublishedAwardWinner::toCsvRow)
+        val saveResult = publishedEventRepository.save(
+            eventHeaders = managedHeaders,
+            eventRows = finalRows,
+            awardHeaders = PublishedAwardWinner.HEADERS,
+            awardRows = awardRows,
+            dryRun = request.dryRun,
+        )
 
         return SyncResult(
             fetchedCount = sourceEvents.size,
@@ -48,11 +63,19 @@ class SyncEventsUseCase(
             newCount = mergeResult.decisions.count { it.type == SyncDecisionType.NEW },
             updatedCount = mergeResult.decisions.count { it.type == SyncDecisionType.UPDATED },
             skippedCount = mergeResult.decisions.count { it.type == SyncDecisionType.SKIPPED },
-            expiredCount = publicationResult.expiredEvents.size,
             duplicateErrorCount = publicationResult.duplicateEvents.size,
             invalidUpdatedAtCount = mergeResult.invalidUpdatedAtRecords.size,
             outputPath = publishedEventRepository.outputPath.normalize().toString(),
-            changed = changed,
+            awardOutputPath = publishedEventRepository.awardOutputPath.normalize().toString(),
+            awardFetchedCount = sourceAwardWinners.size,
+            awardApprovedCount = sourceAwardWinners.count { it.status == "Approved" },
+            awardPublishedCount = awardPublicationResult.winners.size,
+            organizerOfficialVideoCount = awardPublicationResult.winners.count { it.videoSourceType == VideoSourceType.ORGANIZER_OFFICIAL },
+            teamOfficialVideoCount = awardPublicationResult.winners.count { it.videoSourceType == VideoSourceType.TEAM_OFFICIAL },
+            generalVideoCount = awardPublicationResult.winners.count { it.videoSourceType == VideoSourceType.GENERAL },
+            eventChanged = saveResult.eventChanged,
+            awardChanged = saveResult.awardChanged,
+            changed = saveResult.changed,
             duplicateEventIds = publicationResult.duplicateEvents.map { it.eventId },
             warnings = mergeResult.invalidUpdatedAtRecords.map { it.reason },
             trigger = request.trigger,

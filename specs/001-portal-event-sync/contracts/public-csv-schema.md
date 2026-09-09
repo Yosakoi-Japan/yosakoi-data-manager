@@ -1,38 +1,35 @@
 # 契約: 公開用 CSV スキーマ
 
-## 目的
+## `yosakoi_festival.csv`
 
-フロントエンドが取り込む公開用 CSV の列契約を定義する。
+- Google スプレッドシートの `events` シートと同じ公開列名・列順を維持する。
+- `note` と `review` は公開しない。
+- `status = Approved` かつ有効な `official_url` を持つイベントだけを出力する。
+- 開催終了日は除外条件にしない。過去イベントも保持する。
+- 重複 `event_id` はその ID の全行を除外する。
+- 文字コードは UTF-8 とする。
 
-## スキーマ規則
+## `award_winners.csv`
 
-- 列名は Google スプレッドシート管理元と同一であること
-- 列順は Google スプレッドシート管理元と同一であること
-- 出力文字コードは UTF-8 であること
-- 出力対象は `Approved` かつ過去開催でないイベントのみであること
-- 重複 `event_id` や不正 `updated_at` により対象外となったイベントは出力しないこと
+公開ヘッダは次の固定順序とする。
 
-## 行選択ルール
+```text
+event_id,award_name,team_name,result_source_url,video_url,video_source_type,status,updated_at
+```
 
-| 条件 | 挙動 |
-|------|------|
-| `status != Approved` | 出力しない |
-| 終了日 < 実行日 | 出力しない |
-| 同じ `event_id` が複数存在 | その ID の行を出力しない |
-| `updated_at` 不正かつ既存更新対象 | 既存行を上書きしない |
+- `status = Approved` の検証済み行だけを出力する。
+- `event_id` は公開対象イベントに存在しなければならない。
+- `award_name`、`team_name`、`result_source_url`、`video_url`、`video_source_type`、`updated_at` は必須。
+- `result_source_url` は公式結果を示す絶対 HTTPS URL とする。
+- `video_url` はチャンネルやプレイリストではなく、単一動画を示す絶対 HTTPS URL とする。
+- `video_source_type` は `OrganizerOfficial`、`TeamOfficial`、`General` のいずれかとする。
+- `(event_id, 正規化済み team_name)` は一意とする。共同受賞は異なるチーム名で複数行にする。
+- 同一イベント内で行ごとに異なる `award_name` と `result_source_url` を登録できる。
+- `note` は管理用の非公開列とし、CSV へ出力しない。
+- 行順は `event_id`、正規化済み `team_name` の昇順とする。
 
-## 検証観点
+## 保存契約
 
-- ヘッダが管理元と完全一致する
-- 行ごとの列数がヘッダと一致する
-- Approved 以外の行が含まれない
-- 終了済みイベントが含まれない
-
-## 利用側の前提
-
-フロントエンドは列構成が固定である前提で CSV を取り込む。列名や列順の変更は
-破壊的変更として扱う。
-
-## 正本としての前提
-
-この CSV は Git 上で管理され、次回同期時の比較元としても利用される。
+2つの CSV は、全入力の取得と `Approved` 行の検証を完了してから、差分があるファイルだけ
+直接書き込む。受賞行の検証失敗時はどちらも更新しない。書き込み失敗はCLI全体を失敗させ、
+GitHub Actionsではcommit・pushを行わない。ローカルファイルのロールバックは行わない。

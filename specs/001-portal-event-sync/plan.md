@@ -6,10 +6,11 @@
 ## 概要
 
 Google スプレッドシートを管理元として読み取り、`Approved` のイベントのみを抽出し、
-管理元と同一列構成の CSV を生成する CLI バッチを実装する。反映は、`end_date` が
-過去の日付であるイベントを除外したうえで、未保存の `event_id` を新規追加し、
+管理元と同一列構成のイベント CSV と、固定スキーマの受賞チーム CSV を生成する CLI バッチを実装する。
+イベントは過去開催分も保持し、未保存の `event_id` を新規追加し、
 既存データは `updated_at` が新しい場合のみ更新する。重複 `event_id` や不正な
-`updated_at` は上書き対象外として記録し、定期実行と手動実行で同一ロジックを使う。
+`updated_at` は上書き対象外として記録する。受賞行は別シートから取得し、必須動画を含む
+`Approved` 行だけを公開する。定期実行と手動実行で同一ロジックを使う。
 
 ## 技術コンテキスト
 
@@ -19,8 +20,8 @@ Google スプレッドシートを管理元として読み取り、`Approved` �
 **テスト**: Gradle + JUnit 5 による unit / integration / contract テスト  
 **対象プラットフォーム**: GitHub Actions から実行される CLI 環境  
 **プロジェクト種別**: CLI バッチアプリケーション  
-**制約**: データベース不使用、UTF-8 CSV、Google Sheets 管理元と同一列構成、差分がない場合は非更新  
-**規模 / スコープ**: 単一スプレッドシート起点のイベント同期、運営担当者向け手動実行 + GitHub Actions 定期実行  
+**制約**: データベース不使用、UTF-8 CSV、イベント CSV は管理元と同一列構成、受賞 CSV は固定列、差分がない場合は非更新
+**規模 / スコープ**: 単一スプレッドシート内の events / award_winners 同期、運営担当者向け手動実行 + GitHub Actions 定期実行
 **実データ観察**: `specs/001-portal-event-sync/events - events.csv` の列は `event_id`,
 `event_name`, `status`, `start_date`, `end_date`, `updated_at` を含む。`updated_at`
 は必須項目として運用する前提に更新された。
@@ -36,14 +37,13 @@ Google スプレッドシートを管理元として読み取り、`Approved` �
   手動実行と GitHub Actions 定期実行の両方で同一引数体系を利用する。入力、出力、
   Git 管理 CSV、認証情報の場所を quickstart に明記する。
 - **Verification Before Merge**: Approved 抽出、`updated_at` 比較、`end_date`
-  による過去開催除外、`event_id` 重複除外、CSV 列構成維持を自動テストで検証する。
-- **Safe and Idempotent File Handling**: 生成 CSV は一時ファイル作成後に置換する。
-  反映前に Git 管理された既存 CSV との差分なし判定を行い、上書き対象外レコードは
-  ログに残して既存公開データを維持する。
+  の過去開催保持、受賞動画必須、`event_id` 重複除外、CSV 列構成維持を自動テストで検証する。
+- **Safe and Idempotent File Handling**: 反映前に Git 管理された既存 CSV との差分なし判定を行う。
+  書き込み失敗は同期全体を失敗させてcommit・pushを止め、上書き対象外レコードはログに残す。
 - **Clean Code and Maintainability**: Google Sheets 取得、正規化、判定、CSV 書き出し、
   公開 CSV 読み込みを責務ごとに分離する。CLI は実行の統括のみを担当させる。
 - **Observable Outputs and Decision Records**: 実行ごとに取得件数、Approved 件数、
-  新規追加件数、更新件数、スキップ件数、重複件数、期限切れ除外件数を出力する。
+  新規追加件数、更新件数、スキップ件数、重複件数、受賞・動画件数を出力する。
 
 **ゲート結果（設計前）**: 通過
 
@@ -67,6 +67,7 @@ specs/001-portal-event-sync/
 
 ```text
 yosakoi_festival.csv
+award_winners.csv
 
 src/
     └── kotlin/
@@ -89,10 +90,10 @@ src/test/kotlin/jp/yosakoi/sync/
 
 ## データフローと成果物
 
-- **入力**: Google スプレッドシートのイベント一覧、ローカル認証情報、リポジトリ直下の `yosakoi_festival.csv`
-- **変換**: Sheets 読み取り → 行正規化 → `Approved` 抽出 → `end_date` による過去開催除外 →
-  `event_id` 重複除外 → 新規 / 更新判定 → CSV 生成 → 差分あり時のみ反映
-- **出力**: リポジトリ直下の `yosakoi_festival.csv`、実行ログ
+- **入力**: Google スプレッドシートの events / award_winners、ローカル認証情報、既存公開 CSV
+- **変換**: Sheets 読み取り → 行正規化 → `Approved` 抽出 → イベント重複除外 →
+  受賞行・動画検証 → 差分がある CSV のみ書き込み → 成功時のみ Git 反映
+- **出力**: リポジトリ直下の `yosakoi_festival.csv`、`award_winners.csv`、実行ログ
 - **運用手順**: GitHub Actions と手動実行の両方で `./gradlew run --args="--sheet-id ... --worksheet ..."` を使う。出力先はリポジトリ直下の `yosakoi_festival.csv` に固定する
 
 ## 設計後の憲章チェック

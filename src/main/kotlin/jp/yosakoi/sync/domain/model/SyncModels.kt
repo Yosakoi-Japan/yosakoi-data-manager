@@ -24,7 +24,6 @@ data class SyncDecision(
  */
 data class PublicationResult(
     val publishableEvents: List<ApprovedEvent>,
-    val expiredEvents: List<SourceEvent>,
     val duplicateEvents: List<DuplicateEventError>,
 )
 

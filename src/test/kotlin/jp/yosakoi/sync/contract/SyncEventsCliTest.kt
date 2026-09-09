@@ -1,6 +1,6 @@
 package jp.yosakoi.sync.contract
 
-import jp.yosakoi.sync.FakeReader
+import jp.yosakoi.sync.FakePortalDataSource
 import jp.yosakoi.sync.InMemoryPublishedEventRepository
 import jp.yosakoi.sync.SyncEventsCli
 import jp.yosakoi.sync.SyncEventsCommand
@@ -29,6 +29,16 @@ class SyncEventsCliTest {
     }
 
     @Test
+    fun `awards worksheet is not a public cli argument`() {
+        assertEquals(
+            null,
+            SyncEventsCli.parseArgs(
+                listOf("--sheet-id", "s", "--worksheet", "events", "--awards-worksheet", "winners"),
+            ),
+        )
+    }
+
+    @Test
     fun `cli outputs change detection`() {
         val output = ByteArrayOutputStream()
         val csvPath = tempDir.resolve("yosakoi_festival.csv")
@@ -39,7 +49,7 @@ class SyncEventsCliTest {
         val command = SyncEventsCommand(
             stdout = PrintStream(output),
             useCase = SyncEventsUseCase(
-                eventSource = FakeReader(rows = listOf(makeRow(eventId = "a", eventName = "Festival A", extra = mapOf("official_url" to "https://example.com/a")))),
+                source = FakePortalDataSource(rows = listOf(makeRow(eventId = "a", eventName = "Festival A", extra = mapOf("official_url" to "https://example.com/a")))),
                 publishedEventRepository = repository,
             ),
         )

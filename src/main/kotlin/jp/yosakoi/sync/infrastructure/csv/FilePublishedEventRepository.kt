@@ -2,6 +2,7 @@ package jp.yosakoi.sync.infrastructure.csv
 
 import jp.yosakoi.sync.application.model.PublishedEventsSnapshot
 import jp.yosakoi.sync.application.port.PublishedEventRepository
+import jp.yosakoi.sync.application.port.PublicationSaveResult
 import jp.yosakoi.sync.domain.model.PublishedEventRecord
 import org.apache.commons.csv.CSVFormat
 import org.apache.commons.csv.CSVParser
@@ -10,7 +11,6 @@ import java.io.StringWriter
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 /**
@@ -18,9 +18,8 @@ import java.security.MessageDigest
  */
 open class FilePublishedEventRepository(
     override val outputPath: Path,
+    override val awardOutputPath: Path = outputPath.resolveSibling("award_winners.csv"),
 ) : PublishedEventRepository {
-    constructor(outputPath: String) : this(Path.of(outputPath))
-
     /**
      * 既存の公開 CSV を読み込み、ヘッダと event_id ごとの既存レコードを返す。
      */
@@ -46,30 +45,38 @@ open class FilePublishedEventRepository(
         }
     }
 
-    /**
-     * 生成内容に差分がある場合だけ、公開 CSV を安全に置き換える。
-     */
-    override fun save(headers: List<String>, rows: List<Map<String, String>>, dryRun: Boolean): Boolean {
-        val content = buildCsv(headers, rows)
-        if (Files.exists(outputPath)) {
-            val existing = Files.readString(outputPath, StandardCharsets.UTF_8)
-            if (contentChecksum(existing) == contentChecksum(content)) {
-                return false
-            }
-        }
-        if (dryRun) {
-            return true
+    /** 差分がある CSV だけを書き込み、書き込み失敗は呼び出し元へ伝える。 */
+    override fun save(
+        eventHeaders: List<String>,
+        eventRows: List<Map<String, String>>,
+        awardHeaders: List<String>,
+        awardRows: List<Map<String, String>>,
+        dryRun: Boolean,
+    ): PublicationSaveResult {
+        val documents = listOf(
+            CsvDocument(outputPath, buildCsv(eventHeaders, eventRows)),
+            CsvDocument(awardOutputPath, buildCsv(awardHeaders, awardRows)),
+        )
+        val changed = documents.filter { document -> contentDiffers(document.path, document.content) }
+        val result = PublicationSaveResult(
+            eventChanged = changed.any { it.path == outputPath },
+            awardChanged = changed.any { it.path == awardOutputPath },
+        )
+        if (dryRun || changed.isEmpty()) {
+            return result
         }
 
-        outputPath.parent?.let(Files::createDirectories)
-        val tempPath = outputPath.resolveSibling("${outputPath.fileName}.tmp")
-        try {
-            Files.writeString(tempPath, content, StandardCharsets.UTF_8)
-            Files.move(tempPath, outputPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-        } finally {
-            Files.deleteIfExists(tempPath)
+        changed.forEach { document ->
+            val target = document.path.toAbsolutePath()
+            Files.createDirectories(target.parent)
+            Files.writeString(target, document.content, StandardCharsets.UTF_8)
         }
-        return true
+        return result
+    }
+
+    private fun contentDiffers(path: Path, content: String): Boolean {
+        if (!Files.exists(path)) return true
+        return contentChecksum(Files.readString(path, StandardCharsets.UTF_8)) != contentChecksum(content)
     }
 
     /**
@@ -95,4 +102,6 @@ open class FilePublishedEventRepository(
         val bytes = MessageDigest.getInstance("SHA-256").digest(content.toByteArray())
         return bytes.joinToString("") { "%02x".format(it) }
     }
+
+    private data class CsvDocument(val path: Path, val content: String)
 }

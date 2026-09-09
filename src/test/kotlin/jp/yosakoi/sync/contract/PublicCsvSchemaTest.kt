@@ -2,6 +2,7 @@ package jp.yosakoi.sync.contract
 
 import jp.yosakoi.sync.makeRow
 import jp.yosakoi.sync.infrastructure.csv.FilePublishedEventRepository
+import jp.yosakoi.sync.domain.model.PublishedAwardWinner
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -23,9 +24,14 @@ class PublicCsvSchemaTest {
             headers.forEach { header -> this[header] = row[header].orEmpty() }
         }
 
-        val changed = repository.save(headers, listOf(managedRow))
+        val changed = repository.save(
+            eventHeaders = headers,
+            eventRows = listOf(managedRow),
+            awardHeaders = PublishedAwardWinner.HEADERS,
+            awardRows = emptyList(),
+        )
 
-        assertTrue(changed)
+        assertTrue(changed.eventChanged)
         val lines = output.toFile().readLines()
         assertEquals(headers, lines.first().split(","))
         assertEquals("a", lines[1].split(",").first())

@@ -41,14 +41,14 @@ jobs:
 
       - name: Commit generated CSV in this repository
         run: |
-          if [ -z "$(git status --short -- yosakoi_festival.csv)" ]; then
+          if [ -z "$(git status --short -- yosakoi_festival.csv award_winners.csv)" ]; then
             echo "No changes to commit"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add yosakoi_festival.csv
-          git commit -m "chore: sync yosakoi festival csv"
+          git add yosakoi_festival.csv award_winners.csv
+          git commit -m "chore: sync yosakoi portal csv files"
           git push
 
       - name: Checkout yosakoiPortal
@@ -61,16 +61,17 @@ jobs:
       - name: Copy generated CSV to frontend
         run: |
           cp ./yosakoi_festival.csv ./yosakoiPortal/frontend/app/src/assets/data/yosakoi_event.csv
+          cp ./award_winners.csv ./yosakoiPortal/frontend/app/src/assets/data/award_winners.csv
 
       - name: Commit frontend CSV
         working-directory: ./yosakoiPortal
         run: |
-          if [ -z "$(git status --short -- frontend/app/src/assets/data/yosakoi_event.csv)" ]; then
+          if [ -z "$(git status --short -- frontend/app/src/assets/data/yosakoi_event.csv frontend/app/src/assets/data/award_winners.csv)" ]; then
             echo "No changes to commit"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend/app/src/assets/data/yosakoi_event.csv
-          git commit -m "chore: sync frontend yosakoi_event csv"
+          git add frontend/app/src/assets/data/yosakoi_event.csv frontend/app/src/assets/data/award_winners.csv
+          git commit -m "chore: sync frontend yosakoi portal csv files"
           git push

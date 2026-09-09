@@ -13,12 +13,28 @@ interface PublishedEventRepository {
     val outputPath: Path
 
     /**
+     * 受賞チーム CSV の出力先を返す。
+     */
+    val awardOutputPath: Path
+
+    /**
      * 既存の公開 CSV を読み込み、ヘッダと保存済みイベント一覧を返す。
      */
     fun loadSnapshot(): PublishedEventsSnapshot
 
-    /**
-     * 指定ヘッダと行一覧で公開 CSV を保存し、差分があったかを返す。
-     */
-    fun save(headers: List<String>, rows: List<Map<String, String>>, dryRun: Boolean = false): Boolean
+    /** イベント CSV と受賞チーム CSV を一つの公開単位として保存する。 */
+    fun save(
+        eventHeaders: List<String>,
+        eventRows: List<Map<String, String>>,
+        awardHeaders: List<String>,
+        awardRows: List<Map<String, String>>,
+        dryRun: Boolean = false,
+    ): PublicationSaveResult
+}
+
+data class PublicationSaveResult(
+    val eventChanged: Boolean,
+    val awardChanged: Boolean,
+) {
+    val changed: Boolean = eventChanged || awardChanged
 }
