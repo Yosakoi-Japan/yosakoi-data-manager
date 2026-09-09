@@ -6,27 +6,26 @@ import com.google.api.services.sheets.v4.Sheets
 import com.google.api.services.sheets.v4.SheetsScopes
 import com.google.auth.http.HttpCredentialsAdapter
 import com.google.auth.oauth2.GoogleCredentials
-import jp.yosakoi.sync.application.port.EventSource
+import jp.yosakoi.sync.application.port.PortalDataSource
+import jp.yosakoi.sync.domain.model.SourceAwardWinner
 import jp.yosakoi.sync.domain.model.SourceEvent
 import java.io.FileInputStream
 
-/**
- * Google Sheets API を使って管理元イベントを取得するインフラ実装。
- */
-class GoogleSheetsEventSource(
+/** Google Sheets APIからイベントと受賞チームを取得する。 */
+class GoogleSheetsPortalDataSource(
     private val credentialsPath: String,
-) : EventSource {
-    /**
-     * ワークシートの全行を取得し、[SourceEvent] 一覧へ変換する。
-     */
-    override fun fetch(sheetId: String, worksheet: String): List<SourceEvent> {
-        val credentials = buildCredentials()
-        val service = Sheets.Builder(
-            GoogleNetHttpTransport.newTrustedTransport(),
-            GsonFactory.getDefaultInstance(),
-            HttpCredentialsAdapter(credentials),
-        ).setApplicationName("yosakoi-data-manager").build()
+) : PortalDataSource {
+    private val service: Sheets by lazy(::buildService)
 
+    override fun fetchEvents(sheetId: String, worksheet: String): List<SourceEvent> {
+        return fetchRows(sheetId, worksheet).map(SourceEvent::fromColumns)
+    }
+
+    override fun fetchAwardWinners(sheetId: String, worksheet: String): List<SourceAwardWinner> {
+        return fetchRows(sheetId, worksheet).map(SourceAwardWinner::fromColumns)
+    }
+
+    private fun fetchRows(sheetId: String, worksheet: String): List<LinkedHashMap<String, String>> {
         val values = service.spreadsheets().values().get(sheetId, worksheetRange(worksheet)).execute().getValues().orEmpty()
         if (values.isEmpty()) {
             return emptyList()
@@ -38,21 +37,24 @@ class GoogleSheetsEventSource(
             headers.forEachIndexed { index, header ->
                 row[header] = rowValues.getOrNull(index)?.toString() ?: ""
             }
-            SourceEvent.fromColumns(row)
+            row
         }
     }
 
-    /**
-     * サービスアカウント JSON から読み取り専用の認証情報を生成する。
-     */
+    private fun buildService(): Sheets {
+        val credentials = buildCredentials()
+        return Sheets.Builder(
+            GoogleNetHttpTransport.newTrustedTransport(),
+            GsonFactory.getDefaultInstance(),
+            HttpCredentialsAdapter(credentials),
+        ).setApplicationName("yosakoi-data-manager").build()
+    }
+
     private fun buildCredentials(): GoogleCredentials {
         val scoped = FileInputStream(credentialsPath).use { GoogleCredentials.fromStream(it) }
         return scoped.createScoped(listOf(SheetsScopes.SPREADSHEETS_READONLY))
     }
 
-    /**
-     * ワークシート名を Sheets API の range 形式へ変換する。
-     */
     private fun worksheetRange(worksheet: String): String {
         val escaped = worksheet.replace("'", "''")
         return "'$escaped'"

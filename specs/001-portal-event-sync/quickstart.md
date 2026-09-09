@@ -1,88 +1,53 @@
-# Quickstart: Yosakoi Portal イベントデータ連携
+# Quickstart: Yosakoi Portal イベント・受賞データ連携
 
 ## 前提
 
-- Java 21 以上が利用できること
-- Google Sheets 読み取り用のサービスアカウント認証情報をローカルに配置すること
-- 管理元シートに `event_id`、`event_name`、`status`、`start_date`、`end_date`、`updated_at` の列が存在すること
-- `updated_at` は必須入力であること
-- `specs/001-portal-event-sync/events - events.csv` の現状では `status=Progress` が中心なので、
-  公開同期には `Approved` 運用が必要であること
+- Java 21 以上
+- Google Sheets 読み取り権限を持つサービスアカウント
+- 既存の `events` シート（列変更なし）
+- 新規の `award_winners` シート
 
-## セットアップ
+`award_winners` の列は次の順序を推奨する。
 
-1. Gradle Wrapper で依存関係を取得する
-2. 認証情報ファイルを環境変数で参照できるようにする
+```text
+event_id,award_name,team_name,result_source_url,video_url,video_source_type,status,updated_at,note
+```
+
+動画確認前の行は `Progress` とし、`video_url` と `video_source_type` を空にできる。
+`Approved` にする時点では公開列がすべて必須になる。
+
+## 実行
 
 ```bash
-./gradlew test
 export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/service-account.json
+./gradlew run --args="--sheet-id <google-sheet-id> --worksheet events"
 ```
 
-## 手動実行
+受賞シートは常に `award_winners` を読む。確認のみの場合は `--dry-run` を追加する。
 
-```bash
-./gradlew run --args="--sheet-id <google-sheet-id> --worksheet <worksheet-name>"
-```
+## 同期ルール
 
-## 実行ルール
-
-- `Approved` のイベントだけを公開候補にする
-- 出力先はリポジトリ直下の `yosakoi_festival.csv` に固定する
-- `end_date` が今日より前のイベントは対象外にする
-- `event_id` が未保存なら新規追加する
-- 既存の `event_id` は `updated_at` が新しい場合のみ上書きする
-- `updated_at` が不正なら上書きしない
-- 同じ `event_id` の `Approved` イベントが複数ある場合は重複エラーとして除外する
-- 差分がない場合は既存公開 CSV を更新しない
-- 公開用 CSV は Git 上で管理し、次回同期時の比較元として使う
-
-## `dry-run` 相当の確認
-
-手動確認専用モードを実装する場合は、出力前に判定結果だけを表示する。
-現時点の基本フローでは通常実行時ログで以下を必ず確認できるようにする。
-
-- 取得件数
-- `Approved` 件数
-- 新規追加件数
-- 更新件数
-- 非更新件数
-- 期限切れ除外件数
-- 重複エラー件数
-- `updated_at` 不正件数
+- `events`: `Approved` かつ有効な公式 URL を持つイベントを公開し、過去開催分も保持する。
+- `award_winners`: 有効な `Approved` 行のみを公開する。動画 URL は必須で、単一動画を指す HTTPS URL に限る。
+- 受賞は同じ `event_id` でも賞名と結果 URL を行ごとに変えられる。チームごとに一行登録する。
+- 代表動画は `OrganizerOfficial`、`TeamOfficial`、`General` の順で優先して選ぶ。
+  一般投稿動画は `video_source_type=General` として人手確認後に公開できる。
+- 受賞行の検証失敗時はイベント CSV と受賞 CSV の両方を更新しない。
+- 2つの CSV は差分がある場合だけ直接書き込む。失敗時はcommit・pushしない。
 
 ## 生成物
 
-- `yosakoi_festival.csv`: リポジトリ直下で Git 管理する公開用 CSV
-- `artifacts/logs/`: 実行ログ保存先
+- `yosakoi_festival.csv`: イベント公開データ
+- `award_winners.csv`: 受賞チームと代表動画
 
-## GitHub Actions 運用
+## GitHub Actions
 
-- 定期実行は GitHub Actions の `schedule` を使う
-- 手動実行は GitHub Actions の `workflow_dispatch` を使う
-- Actions 実行時はリポジトリを checkout し、`yosakoi_festival.csv` を比較元として使う
-- 更新後の `yosakoi_festival.csv` を commit / push する
-- Google Sheets 認証情報とシート ID は GitHub Secrets で管理する
-
-想定するワークフローの役割は次のとおりです。
-
-- `schedule`: 定期実行
-- `workflow_dispatch`: 手動実行
-- `actions/setup-java`: Java 実行環境の準備
-- `gradle/actions/setup-gradle`: Gradle 実行準備
-- 認証情報ファイル生成: Secrets から一時ファイルを作成
-- 同期コマンド実行: `./gradlew run --args="..."` を実行
-- CSV 変更時のみ commit / push: Git 管理の公開 CSV を更新
+Secrets は `GOOGLE_SERVICE_ACCOUNT_JSON`、`GOOGLE_SHEET_ID`、`GOOGLE_WORKSHEET`、
+`YOSAKOI_PORTAL_PAT` が必須。生成した2ファイルをこのリポジトリで同時に commit し、
+ポータル側の assets/data にコピーして同時に commit する。
 
 ## 検証
 
 ```bash
 ./gradlew test
 ```
-
-最低限、以下のケースを fixture で確認する。
-
-- `Approved` 以外が出力されない
-- 同じ `event_id` の既存イベントは `updated_at` が新しい時だけ更新される
-- `end_date` 終了済みイベントが対象外になる
-- 重複 `event_id` が除外される

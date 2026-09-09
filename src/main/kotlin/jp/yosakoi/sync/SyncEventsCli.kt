@@ -3,12 +3,13 @@ package jp.yosakoi.sync
 import jp.yosakoi.sync.application.model.SyncEventsRequest
 import jp.yosakoi.sync.application.usecase.SyncEventsUseCase
 import jp.yosakoi.sync.infrastructure.csv.FilePublishedEventRepository
-import jp.yosakoi.sync.infrastructure.google.GoogleSheetsEventSource
+import jp.yosakoi.sync.infrastructure.google.GoogleSheetsPortalDataSource
 import java.io.PrintStream
-import java.time.LocalDate
+import java.nio.file.Path
 
 object SyncEventsCli {
     const val DEFAULT_OUTPUT_PATH: String = "./yosakoi_festival.csv"
+    const val DEFAULT_AWARD_OUTPUT_PATH: String = "./award_winners.csv"
 
     /**
      * 本番用の依存関係を組み立てて同期コマンドを実行する。
@@ -17,7 +18,6 @@ object SyncEventsCli {
         args: Array<String>,
         env: Map<String, String> = System.getenv(),
         stdout: PrintStream = System.out,
-        today: LocalDate? = null,
     ): Int {
         val parsed = parseArgs(args.toList()) ?: run {
             printUsage(stdout)
@@ -28,12 +28,16 @@ object SyncEventsCli {
             val credentialsPath = env["GOOGLE_APPLICATION_CREDENTIALS"]
                 ?: throw IllegalStateException("GOOGLE_APPLICATION_CREDENTIALS is required")
             val trigger = env["GITHUB_EVENT_NAME"] ?: "manual"
+            val source = GoogleSheetsPortalDataSource(credentialsPath)
             val useCase = SyncEventsUseCase(
-                eventSource = GoogleSheetsEventSource(credentialsPath),
-                publishedEventRepository = FilePublishedEventRepository(DEFAULT_OUTPUT_PATH),
+                source = source,
+                publishedEventRepository = FilePublishedEventRepository(
+                    Path.of(DEFAULT_OUTPUT_PATH),
+                    Path.of(DEFAULT_AWARD_OUTPUT_PATH),
+                ),
             )
             val command = SyncEventsCommand(stdout = stdout, useCase = useCase)
-            command.run(parsed = parsed, trigger = trigger, today = today)
+            command.run(parsed = parsed, trigger = trigger)
         } catch (error: Exception) {
             stdout.println("error=${error.message ?: error::class.simpleName}")
             1
@@ -80,7 +84,7 @@ class SyncEventsCommand(
     /**
      * 解析済みの引数をユースケースへ渡し、CLI 用の終了コードを返す。
      */
-    fun run(parsed: ParsedArgs, trigger: String, today: LocalDate? = null): Int {
+    fun run(parsed: ParsedArgs, trigger: String): Int {
         return try {
             val result = useCase.execute(
                 SyncEventsRequest(
@@ -88,7 +92,6 @@ class SyncEventsCommand(
                     worksheet = parsed.worksheet,
                     dryRun = parsed.dryRun,
                     trigger = trigger,
-                    today = today,
                 ),
             )
             result.toStdoutLines().forEach(stdout::println)
@@ -108,12 +111,12 @@ class SyncEventsCommand(
     /**
      * 引数配列を解析してからユースケースを実行する。
      */
-    fun run(args: Array<String>, trigger: String, today: LocalDate? = null): Int {
+    fun run(args: Array<String>, trigger: String): Int {
         val parsed = SyncEventsCli.parseArgs(args.toList()) ?: run {
             SyncEventsCli.printUsage(stdout)
             return 1
         }
-        return run(parsed, trigger, today)
+        return run(parsed, trigger)
     }
 }
 

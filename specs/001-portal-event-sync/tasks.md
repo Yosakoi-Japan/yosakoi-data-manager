@@ -91,7 +91,7 @@
 - [X] T026a [P] [US2] `tests/unit/test_event_filter.py` に重複 `event_id` 検出と除外の単体テストを追加する
 - [X] T025a [P] [US2] `tests/integration/test_sync_pipeline.py` に重複 `event_id` が公開 CSV に出力されないことを確認する統合テストを追加する
 - [X] T025b [P] [US2] `tests/integration/test_sync_pipeline.py` に管理元取得失敗時に既存 CSV が不変であることを確認する統合テストを追加する
-- [X] T025c [P] [US2] `tests/integration/test_sync_pipeline.py` に CSV 書き込み失敗時に既存 CSV が不変であることを確認する統合テストを追加する
+- [X] T025c [P] [US2] `src/test/kotlin/jp/yosakoi/sync/integration/SyncPipelineTest.kt` に CSV 書き込み失敗が呼び出し元へ伝播する統合テストを追加する
 
 ### ユーザーストーリー2の実装
 
@@ -100,7 +100,7 @@
 - [X] T028a [US2] `src/yosakoi_data_manager/services/event_filter.py` に重複 `event_id` を検出して除外する処理を実装する
 - [X] T029 [US2] `src/yosakoi_data_manager/services/sync_orchestrator.py` に `updated_at` ベースのマージ規則を組み込む
 - [X] T030 [US2] `src/yosakoi_data_manager/services/csv_exporter.py` に内容変更時のみ `yosakoi_festival.csv` を安全に置き換える処理を実装する
-- [X] T030a [US2] `src/yosakoi_data_manager/services/csv_exporter.py` に一時ファイル書き込み失敗時の安全終了処理を実装する
+- [X] T030a [US2] CSV 書き込み失敗時に同期を失敗させ、commit・pushへ進まない処理を実装する
 - [X] T031 [US2] `src/yosakoi_data_manager/services/sync_orchestrator.py` に新規件数、更新件数、スキップ件数、`invalid_updated_at` 件数の出力を追加する
 - [X] T031a [US2] `src/yosakoi_data_manager/services/sync_orchestrator.py` に `duplicate_error_count` と対象 `event_id` の出力を追加する
 - [X] T032 [US2] `src/yosakoi_data_manager/lib/checksum.py` と `src/yosakoi_data_manager/services/published_csv_store.py` に行単位比較を補助するチェックサム処理を追加する
@@ -246,3 +246,20 @@ Task: ".github/workflows/sync-events.yml 向けのワークフロー検証また
 - 各ユーザーストーリーはフェーズ完了時点で独立検証可能
 - 推奨 MVP スコープは **ユーザーストーリー1のみ**
 - すべてのタスクは `- [ ] T### [P?] [US?] 説明 + file path` 形式を満たす
+
+---
+
+## フェーズ追加: 過去イベント保持と受賞チーム動画公開
+
+**目的**: 過去の祭りをイベント CSV に残し、別シートで管理する受賞チームと必須動画を公開する。
+
+- [X] T048 [P] `src/test/kotlin/jp/yosakoi/sync/unit/EventFilterTest.kt` と `src/test/kotlin/jp/yosakoi/sync/integration/SyncPipelineTest.kt` に過去イベント保持のテストを追加する
+- [X] T049 [P] `src/test/kotlin/jp/yosakoi/sync/unit/AwardWinnerPublicationPolicyTest.kt` に受賞行の必須項目、外部キー、重複、動画 URL、複数賞のテストを追加する
+- [X] T050 [P] `src/test/kotlin/jp/yosakoi/sync/contract/AwardWinnersCsvSchemaTest.kt` に `award_winners.csv` の固定スキーマ契約を追加する
+- [X] T051 `src/main/kotlin/jp/yosakoi/sync/domain/` に受賞行モデル、動画種別、検証・公開判定を実装する
+- [X] T052 `src/main/kotlin/jp/yosakoi/sync/domain/service/EventPublicationPolicy.kt` から終了日による公開除外を撤廃する
+- [X] T053 `src/main/kotlin/jp/yosakoi/sync/application/` と `src/main/kotlin/jp/yosakoi/sync/infrastructure/csv/` にイベント・受賞 CSV の差分書き込みを実装する
+- [X] T054 `src/main/kotlin/jp/yosakoi/sync/infrastructure/google/` と `src/main/kotlin/jp/yosakoi/sync/SyncEventsCli.kt` に固定名 `award_winners` シートの取得を追加する
+- [X] T055 `.github/workflows/sync-events.yml` に 2 CSV の一括 commit とフロントエンドへのコピーを追加する
+- [X] T056 `README.md` と `specs/001-portal-event-sync/` の仕様・契約・運用文書を新仕様へ更新する
+- [X] T057 `./gradlew test` で全テストを実行し、生成 CSV 契約と既存機能の回帰がないことを確認する

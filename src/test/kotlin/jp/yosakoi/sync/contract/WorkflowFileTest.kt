@@ -13,9 +13,10 @@ class WorkflowFileTest {
         assertContains(workflow, "workflow_dispatch:")
         assertContains(workflow, "schedule:")
         assertContains(workflow, "./gradlew run --args=")
-        assertContains(workflow, "git add yosakoi_festival.csv")
+        assertContains(workflow, "git add yosakoi_festival.csv award_winners.csv")
         assertContains(workflow, "repository: Yosakoi-Japan/yosakoiPortal")
         assertContains(workflow, "frontend/app/src/assets/data/yosakoi_event.csv")
+        assertContains(workflow, "frontend/app/src/assets/data/award_winners.csv")
         assertContains(workflow, "YOSAKOI_PORTAL_PAT")
     }
 }
